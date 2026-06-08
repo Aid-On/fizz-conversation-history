@@ -1,0 +1,101 @@
+// fizz_conversation_history — 直近 N ターンの会話履歴 (窓つき)。
+//
+// 責務 (一行): 会話ターンを溜め、上限を超えたら古いものから捨てる。
+//
+// 旧 openaituber chat/aituber.ts の履歴 cap (最新 12 turn = 6 往復) の移植。
+// 方針 (memory: [[conversation-stickiness]]): AITuber は前の話題を引きずら
+// せない。だからこのインメモリ履歴は短く保つ。長期記憶 (DB / recall) は
+// 別部品 (fizz_protocol.memory) の責務で、ここでは扱わない。
+//
+// clear() は配信境界 (ClearBroadcast) で呼ばれる想定。
+//
+// このパッケージは外部依存なし (純粋なリングバッファ)。
+
+type Role =
+  | User
+  | Assistant
+
+fn role_to_string(r: Role) -> String = match r {
+  User      => "user",
+  Assistant => "assistant",
+}
+
+type Turn = {
+  role: Role,
+  // 発話者の表示名 (Assistant は空でよい)。
+  speaker: String,
+  text: String,
+}
+
+type History = {
+  turns: List[Turn],
+  // 保持する最大ターン数。
+  cap: Int,
+}
+
+let DEFAULT_CAP = 12
+
+local fn no_turns() -> List[Turn] = []
+
+fn empty(cap: Int) -> History = History { turns: no_turns(), cap: if cap < 1 then 1 else cap }
+
+fn with_default_cap() -> History = empty(DEFAULT_CAP)
+
+local fn trim(h: History) -> History =
+  if list.len(h.turns) <= h.cap then h
+  else { ...h, turns: list.drop(h.turns, list.len(h.turns) - h.cap) }
+
+fn push(h: History, t: Turn) -> History = trim({ ...h, turns: h.turns + [t] })
+
+fn push_user(h: History, speaker: String, text: String) -> History =
+  push(h, Turn { role: User, speaker: speaker, text: text })
+
+fn push_assistant(h: History, text: String) -> History =
+  push(h, Turn { role: Assistant, speaker: "", text: text })
+
+fn turns(h: History) -> List[Turn] = h.turns
+
+fn len(h: History) -> Int = list.len(h.turns)
+
+// 配信境界のリセット (cap は維持)。
+fn clear(h: History) -> History = { ...h, turns: no_turns() }
+
+// ── in-file tests ────────────────────────────────────────────────────
+
+test "push keeps order" {
+  let h = with_default_cap()
+    |> push_user("viewer", "やっほー")
+    |> push_assistant("いらっしゃい！")
+  let ts = turns(h)
+  assert_eq(len(h), 2)
+  assert_eq(list.first(ts)!.text, "やっほー")
+  assert_eq(list.last(ts)!.role, Assistant)
+}
+
+test "cap drops oldest turns" {
+  let h = empty(2)
+    |> push_user("a", "1")
+    |> push_user("a", "2")
+    |> push_user("a", "3")
+  assert_eq(len(h), 2)
+  assert_eq(list.first(turns(h))!.text, "2")
+  assert_eq(list.last(turns(h))!.text, "3")
+}
+
+test "cap floor is 1" {
+  let h = empty(0) |> push_user("a", "x") |> push_user("a", "y")
+  assert_eq(len(h), 1)
+  assert_eq(list.first(turns(h))!.text, "y")
+}
+
+test "clear empties but keeps cap" {
+  let h = empty(5) |> push_user("a", "x") |> clear
+  assert_eq(len(h), 0)
+  let h2 = push_user(h, "a", "z")
+  assert_eq(len(h2), 1)
+}
+
+test "roles stringify" {
+  assert_eq(role_to_string(User), "user")
+  assert_eq(role_to_string(Assistant), "assistant")
+}
