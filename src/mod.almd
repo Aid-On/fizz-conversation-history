@@ -12,12 +12,12 @@
 // このパッケージは外部依存なし (純粋なリングバッファ)。
 
 type Role =
-  | User
-  | Assistant
+  | UserTurn
+  | AssistantTurn
 
 fn role_to_string(r: Role) -> String = match r {
-  User      => "user",
-  Assistant => "assistant",
+  UserTurn      => "user",
+  AssistantTurn => "assistant",
 }
 
 type Turn = {
@@ -48,10 +48,10 @@ local fn trim(h: History) -> History =
 fn push(h: History, t: Turn) -> History = trim({ ...h, turns: h.turns + [t] })
 
 fn push_user(h: History, speaker: String, text: String) -> History =
-  push(h, Turn { role: User, speaker: speaker, text: text })
+  push(h, Turn { role: UserTurn, speaker: speaker, text: text })
 
 fn push_assistant(h: History, text: String) -> History =
-  push(h, Turn { role: Assistant, speaker: "", text: text })
+  push(h, Turn { role: AssistantTurn, speaker: "", text: text })
 
 fn turns(h: History) -> List[Turn] = h.turns
 
@@ -69,7 +69,7 @@ test "push keeps order" {
   let ts = turns(h)
   assert_eq(len(h), 2)
   assert_eq(list.first(ts)!.text, "やっほー")
-  assert_eq(list.last(ts)!.role, Assistant)
+  assert_eq(list.last(ts)!.role, AssistantTurn)
 }
 
 test "cap drops oldest turns" {
@@ -96,6 +96,6 @@ test "clear empties but keeps cap" {
 }
 
 test "roles stringify" {
-  assert_eq(role_to_string(User), "user")
-  assert_eq(role_to_string(Assistant), "assistant")
+  assert_eq(role_to_string(UserTurn), "user")
+  assert_eq(role_to_string(AssistantTurn), "assistant")
 }

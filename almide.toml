@@ -1,4 +1,4 @@
 [package]
 name = "fizz_conversation_history"
-version = "0.1.0"
+version = "0.1.1"
 description = "Fizz brain — windowed in-memory turn history (cap N turns). Conversation doesn't carry topics across resets; DB memory is separate."
